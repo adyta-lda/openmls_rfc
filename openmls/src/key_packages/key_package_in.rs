@@ -210,6 +210,10 @@ impl KeyPackageIn {
     pub(crate) fn version_is_supported(&self, protocol_version: ProtocolVersion) -> bool {
         self.payload.protocol_version == protocol_version
     }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
 }
 
 #[cfg(any(feature = "test-utils", test))]
