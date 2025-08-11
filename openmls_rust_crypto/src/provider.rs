@@ -5,7 +5,7 @@ use aes_gcm::{
     Aes128Gcm, Aes256Gcm, KeyInit,
 };
 use chacha20poly1305::ChaCha20Poly1305;
-use ed25519_dalek::{Signer, VerifyingKey};
+use ed25519_dalek::Signer;
 use hkdf::Hkdf;
 use hpke::Hpke;
 use hpke_rs_crypto::types as hpke_types;
