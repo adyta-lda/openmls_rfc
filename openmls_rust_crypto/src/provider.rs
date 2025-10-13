@@ -22,6 +22,17 @@ use p256::{
     ecdsa::{signature::Verifier, Signature, SigningKey, VerifyingKey},
     EncodedPoint,
 };
+
+use p521::{
+    ecdsa::{
+        signature::Verifier as P521Verifier, 
+        Signature as P521Signature, 
+        SigningKey as P521SigningKey, 
+        VerifyingKey as P521VerifyingKey
+    },
+    EncodedPoint as P521EncodedPoint,
+};
+
 use rand::{RngCore, SeedableRng};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use tls_codec::SecretVLBytes;
@@ -86,7 +97,8 @@ impl OpenMlsCrypto for RustCrypto {
         match ciphersuite {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
             | Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519
-            | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256 => Ok(()),
+            | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256
+            | Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521 => Ok(()),
             _ => Err(CryptoError::UnsupportedCiphersuite),
         }
     }
@@ -96,6 +108,7 @@ impl OpenMlsCrypto for RustCrypto {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256,
+            Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521,
         ]
     }
 
@@ -241,6 +254,22 @@ impl OpenMlsCrypto for RustCrypto {
                 let pk = k.verifying_key().to_encoded_point(false).as_bytes().into();
                 Ok((k.to_bytes().as_slice().into(), pk))
             }
+
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let mut rng = self
+                    .rng
+                    .write()
+                    .map_err(|_| CryptoError::InsufficientRandomness)?;
+                let k = P521SigningKey::random(&mut *rng);
+
+                // let pk = k.verifying_key().to_encoded_point(false).as_bytes().into(); //Check why we cannot access the verifying_key function directly
+                let pk = P521VerifyingKey::from(&k)
+                    .to_encoded_point(false)
+                    .as_bytes()
+                    .into();
+                Ok((k.to_bytes().as_slice().into(), pk))
+            }
+
             SignatureScheme::ED25519 => {
                 let mut rng = self
                     .rng
@@ -273,6 +302,19 @@ impl OpenMlsCrypto for RustCrypto {
                 )
                 .map_err(|_| CryptoError::InvalidSignature)
             }
+            
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = P521VerifyingKey::from_encoded_point(
+                    &P521EncodedPoint::from_bytes(pk).map_err(|_| CryptoError::CryptoLibraryError)?,
+                )
+                .map_err(|_| CryptoError::CryptoLibraryError)?;
+                k.verify(
+                    data,
+                    &P521Signature::from_der(signature).map_err(|_| CryptoError::InvalidSignature)?,
+                )
+                .map_err(|_| CryptoError::InvalidSignature)
+            }
+
             SignatureScheme::ED25519 => {
                 let k = ed25519_dalek::VerifyingKey::try_from(pk)
                     .map_err(|_| CryptoError::CryptoLibraryError)?;
@@ -301,6 +343,14 @@ impl OpenMlsCrypto for RustCrypto {
                 let signature: Signature = k.sign(data);
                 Ok(signature.to_der().to_bytes().into())
             }
+
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = P521SigningKey::from_bytes(key.into())
+                    .map_err(|_| CryptoError::CryptoLibraryError)?;
+                let signature: P521Signature = k.sign(data);
+                Ok(signature.to_der().to_bytes().into())
+            }
+
             SignatureScheme::ED25519 => {
                 let k = ed25519_dalek::SigningKey::try_from(key)
                     .map_err(|_| CryptoError::CryptoLibraryError)?;
