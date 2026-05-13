@@ -7,7 +7,7 @@ use aes_gcm::{
 use chacha20poly1305::ChaCha20Poly1305;
 use ed25519_dalek::Signer;
 use hkdf::Hkdf;
-use hpke::Hpke;
+use hpke_rs::Hpke;
 use hpke_rs_crypto::types as hpke_types;
 use hpke_rs_rust_crypto::HpkeRustCrypto;
 use openmls_traits::{
@@ -21,6 +21,16 @@ use openmls_traits::{
 use p256::{
     ecdsa::{signature::Verifier, Signature, SigningKey, VerifyingKey},
     EncodedPoint,
+};
+
+use p384:: {
+     ecdsa::{
+        signature::Verifier as P384Verifier, 
+        Signature as P384Signature, 
+        SigningKey as P384SigningKey, 
+        VerifyingKey as P384VerifyingKey
+    },
+    EncodedPoint as P384EncodedPoint,
 };
 
 use p521::{
@@ -255,6 +265,21 @@ impl OpenMlsCrypto for RustCrypto {
                 Ok((k.to_bytes().as_slice().into(), pk))
             }
 
+            SignatureScheme::ECDSA_SECP384R1_SHA384 => {
+                let mut rng = self
+                    .rng
+                    .write()
+                    .map_err(|_| CryptoError::InsufficientRandomness)?;
+                let k = P384SigningKey::random(&mut *rng);
+
+                // let pk = k.verifying_key().to_encoded_point(false).as_bytes().into(); //Check why we cannot access the verifying_key function directly
+                let pk = P384VerifyingKey::from(&k)
+                    .to_encoded_point(false)
+                    .as_bytes()
+                    .into();
+                Ok((k.to_bytes().as_slice().into(), pk))
+            }
+
             SignatureScheme::ECDSA_SECP521R1_SHA512 => {
                 let mut rng = self
                     .rng
@@ -302,6 +327,18 @@ impl OpenMlsCrypto for RustCrypto {
                 )
                 .map_err(|_| CryptoError::InvalidSignature)
             }
+
+            SignatureScheme::ECDSA_SECP384R1_SHA384 => {
+                let k = P384VerifyingKey::from_encoded_point(
+                    &P384EncodedPoint::from_bytes(pk).map_err(|_| CryptoError::CryptoLibraryError)?,
+                )
+                .map_err(|_| CryptoError::CryptoLibraryError)?;
+                k.verify(
+                    data,
+                    &P384Signature::from_der(signature).map_err(|_| CryptoError::InvalidSignature)?,
+                )
+                .map_err(|_| CryptoError::InvalidSignature)
+            }
             
             SignatureScheme::ECDSA_SECP521R1_SHA512 => {
                 let k = P521VerifyingKey::from_encoded_point(
@@ -344,6 +381,13 @@ impl OpenMlsCrypto for RustCrypto {
                 Ok(signature.to_der().to_bytes().into())
             }
 
+            SignatureScheme::ECDSA_SECP384R1_SHA384 => {
+                let k = P384SigningKey::from_bytes(key.into())
+                    .map_err(|_| CryptoError::CryptoLibraryError)?;
+                let signature: P384Signature = k.sign(data);
+                Ok(signature.to_der().to_bytes().into())
+            }
+
             SignatureScheme::ECDSA_SECP521R1_SHA512 => {
                 let k = P521SigningKey::from_bytes(key.into())
                     .map_err(|_| CryptoError::CryptoLibraryError)?;
@@ -372,7 +416,7 @@ impl OpenMlsCrypto for RustCrypto {
         let (kem_output, ciphertext) = hpke_from_config(config)
             .seal(&pk_r.into(), info, aad, ptxt, None, None, None)
             .map_err(|e| match e {
-                hpke::HpkeError::InvalidInput => CryptoError::InvalidLength,
+                hpke_rs::HpkeError::InvalidInput => CryptoError::InvalidLength,
                 _ => CryptoError::CryptoLibraryError,
             })?;
         Ok(HpkeCiphertext {
@@ -446,7 +490,7 @@ impl OpenMlsCrypto for RustCrypto {
         let kp = hpke_from_config(config)
             .derive_key_pair(ikm)
             .map_err(|e| match e {
-                hpke::HpkeError::InvalidInput => CryptoError::InvalidLength,
+                hpke_rs::HpkeError::InvalidInput => CryptoError::InvalidLength,
                 _ => CryptoError::CryptoLibraryError,
             })?
             .into_keys();
@@ -459,7 +503,7 @@ impl OpenMlsCrypto for RustCrypto {
 
 fn hpke_from_config(config: HpkeConfig) -> Hpke<HpkeRustCrypto> {
     Hpke::<HpkeRustCrypto>::new(
-        hpke::Mode::Base,
+        hpke_rs::Mode::Base,
         kem_mode(config.0),
         kdf_mode(config.1),
         aead_mode(config.2),
