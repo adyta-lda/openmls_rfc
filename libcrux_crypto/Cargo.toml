@@ -22,6 +22,9 @@ openmls_memory_storage = { workspace = true }
 rand = "0.9"
 tls_codec.workspace = true
 rand_chacha = "0.9"
-hpke-rs = { git = "https://github.com/cryspen/hpke-rs", branch = "main", features = ["hazmat", "serialization", "libcrux-rustcrypto-p-curves"] }
-hpke-rs-crypto = { git = "https://github.com/cryspen/hpke-rs", branch = "main" }
-hpke-rs-libcrux = { git = "https://github.com/cryspen/hpke-rs", branch = "main" }
+hpke-rs = { git = "https://github.com/adyta-lda/hpke-rs", branch = "p521_kem", default-features = false, features = [
+    "hazmat",
+    "serialization",
+] }
+hpke-rs-crypto = { git = "https://github.com/adyta-lda/hpke-rs", branch = "p521_kem" }
+hpke-rs-libcrux = { git = "https://github.com/adyta-lda/hpke-rs", branch = "p521_kem" }
