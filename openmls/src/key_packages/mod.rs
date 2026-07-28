@@ -495,6 +495,11 @@ impl KeyPackage {
         // TODO: get rid of the unwrap, see https://github.com/openmls/openmls/issues/1663.
         self.payload.leaf_node.life_time().unwrap()
     }
+
+    /// Returns the raw signature over the key package's `TBS` payload.
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
 }
 
 /// Crate visible `KeyPackage` functions.

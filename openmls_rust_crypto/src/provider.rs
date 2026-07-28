@@ -24,6 +24,10 @@ use p256::{
     ecdsa::{signature::Verifier, Signature, SigningKey, VerifyingKey},
     EncodedPoint,
 };
+use p521::{
+    ecdsa::{Signature as P521Signature, SigningKey as P521SigningKey, VerifyingKey as P521VerifyingKey},
+    EncodedPoint as P521EncodedPoint,
+};
 use rand_core::{RngCore as _, SeedableRng as _};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use tls_codec::SecretVLBytes;
@@ -94,6 +98,14 @@ impl OpenMlsCrypto for RustCrypto {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
             | Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519
             | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256 => Ok(()),
+            // NOTE: `MLS_256_DHKEMP521_AES256GCM_SHA512_P521` is intentionally NOT
+            // advertised here. `ECDSA_SECP521R1_SHA512` signing/verification is fully
+            // implemented below, but this ciphersuite's HPKE DH-KEM(P-521) has no
+            // implementation in the `hpke-rs-rust-crypto` backend we depend on (it only
+            // implements DhKem25519/P256/P384/K256 — verified by reading its source).
+            // `KeyPackage::builder().build()` would panic deriving `init_key` if this
+            // were advertised as supported. Tracked as a follow-up ticket before this
+            // ciphersuite can be used end-to-end.
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             Ciphersuite::MLS_192_MLKEM1024_AES256GCM_SHA384_P384
             | Ciphersuite::MLS_128_MLKEM768X25519_AES256GCM_SHA384_Ed25519
@@ -113,6 +125,7 @@ impl OpenMlsCrypto for RustCrypto {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256,
+            // `MLS_256_DHKEMP521_AES256GCM_SHA512_P521` deliberately excluded, see `supports()`.
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             Ciphersuite::MLS_192_MLKEM1024_AES256GCM_SHA384_P384,
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
@@ -306,6 +319,18 @@ impl OpenMlsCrypto for RustCrypto {
                 let pk = k.verifying_key().to_encoded_point(false).as_bytes().into();
                 Ok((k.to_bytes().as_slice().into(), pk))
             }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let mut rng = self
+                    .rng
+                    .write()
+                    .map_err(|_| CryptoError::InsufficientRandomness)?;
+                let k = P521SigningKey::random(&mut *rng);
+                let pk = P521VerifyingKey::from(&k)
+                    .to_encoded_point(false)
+                    .as_bytes()
+                    .into();
+                Ok((k.to_bytes().as_slice().into(), pk))
+            }
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             SignatureScheme::MLDSA44 => {
                 use crate::rand_shim::RandCore0_10;
@@ -404,6 +429,19 @@ impl OpenMlsCrypto for RustCrypto {
                 )
                 .map_err(|_| CryptoError::InvalidSignature)
             }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = P521VerifyingKey::from_encoded_point(
+                    &P521EncodedPoint::from_bytes(pk)
+                        .map_err(|_| CryptoError::CryptoLibraryError)?,
+                )
+                .map_err(|_| CryptoError::CryptoLibraryError)?;
+                k.verify(
+                    data,
+                    &P521Signature::from_der(signature)
+                        .map_err(|_| CryptoError::InvalidSignature)?,
+                )
+                .map_err(|_| CryptoError::InvalidSignature)
+            }
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             SignatureScheme::MLDSA44 => {
                 use ml_dsa::Verifier;
@@ -467,6 +505,12 @@ impl OpenMlsCrypto for RustCrypto {
                 let k = p384::ecdsa::SigningKey::from_bytes(key.into())
                     .map_err(|_| CryptoError::CryptoLibraryError)?;
                 let signature: p384::ecdsa::Signature = k.sign(data);
+                Ok(signature.to_der().to_bytes().into())
+            }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = P521SigningKey::from_bytes(key.into())
+                    .map_err(|_| CryptoError::CryptoLibraryError)?;
+                let signature: P521Signature = k.sign(data);
                 Ok(signature.to_der().to_bytes().into())
             }
             SignatureScheme::ED25519 => {
@@ -729,5 +773,34 @@ mod tests {
                 "{ciphersuite:?} is advertised by supported_ciphersuites() but rejected by supports()"
             );
         }
+    }
+
+    /// `MLS_256_DHKEMP521_AES256GCM_SHA512_P521` is not advertised as a supported
+    /// ciphersuite (its HPKE DH-KEM(P-521) is unimplemented upstream), but
+    /// `ECDSA_SECP521R1_SHA512` signing/verification stands on its own and is
+    /// exercised directly here.
+    #[test]
+    fn p521_sign_verify_roundtrip() {
+        let crypto = RustCrypto::default();
+        let (sk, pk) = crypto
+            .signature_key_gen(SignatureScheme::ECDSA_SECP521R1_SHA512)
+            .expect("P-521 key generation should succeed");
+
+        let data = b"AdytaPhone P-521 signature leg";
+        let signature = crypto
+            .sign(SignatureScheme::ECDSA_SECP521R1_SHA512, data, &sk)
+            .expect("P-521 signing should succeed");
+
+        crypto
+            .verify_signature(SignatureScheme::ECDSA_SECP521R1_SHA512, data, &pk, &signature)
+            .expect("P-521 signature should verify");
+
+        let tampered = b"AdytaPhone P-521 signature leg (tampered)";
+        assert!(
+            crypto
+                .verify_signature(SignatureScheme::ECDSA_SECP521R1_SHA512, tampered, &pk, &signature)
+                .is_err(),
+            "signature must not verify against different data"
+        );
     }
 }

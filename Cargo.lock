@@ -2590,6 +2590,7 @@ dependencies = [
  "openmls_traits",
  "p256",
  "p384",
+ "p521",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
@@ -2652,6 +2653,7 @@ dependencies = [
  "openmls_traits",
  "p256",
  "p384",
+ "p521",
  "rand_chacha 0.3.1",
  "rand_core 0.10.1",
  "rand_core 0.6.4",
@@ -2732,6 +2734,20 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "primeorder",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "p521"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fc9e2161f1f215afdfce23677034ae137bbd45016a880c2eb3ba8eb95f085b2"
+dependencies = [
+ "base16ct",
+ "ecdsa",
+ "elliptic-curve",
+ "primeorder",
+ "rand_core 0.6.4",
  "sha2 0.10.9",
 ]
 

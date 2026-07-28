@@ -210,6 +210,11 @@ impl KeyPackageIn {
         self.payload.protocol_version == protocol_version
     }
 
+    /// Returns the raw signature over the key package's `TBS` payload.
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
     /// Assume that the signature is valid and return the [`KeyPackage`].
     ///
     /// # Safety

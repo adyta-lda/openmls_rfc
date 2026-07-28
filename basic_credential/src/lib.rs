@@ -79,6 +79,12 @@ impl Signer for SignatureKeyPair {
                 let signature: p384::ecdsa::Signature = k.sign(payload);
                 Ok(signature.to_der().to_bytes().into())
             }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = p521::ecdsa::SigningKey::from_bytes(self.private.as_slice().into())
+                    .map_err(|_| SignerError::SigningError)?;
+                let signature: p521::ecdsa::Signature = k.sign(payload);
+                Ok(signature.to_der().to_bytes().into())
+            }
             SignatureScheme::ED25519 => {
                 let k = ed25519_dalek::SigningKey::try_from(self.private.as_slice())
                     .map_err(|_| SignerError::SigningError)?;
@@ -156,6 +162,14 @@ impl SignatureKeyPair {
             SignatureScheme::ECDSA_SECP384R1_SHA384 => {
                 let k = p384::ecdsa::SigningKey::random(&mut OsRng);
                 let pk = k.verifying_key().to_encoded_point(false).as_bytes().into();
+                (k.to_bytes().as_slice().into(), pk)
+            }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = p521::ecdsa::SigningKey::random(&mut OsRng);
+                let pk = p521::ecdsa::VerifyingKey::from(&k)
+                    .to_encoded_point(false)
+                    .as_bytes()
+                    .into();
                 (k.to_bytes().as_slice().into(), pk)
             }
             SignatureScheme::ED25519 => {
@@ -294,6 +308,22 @@ impl storage::traits::SignatureKeyPair<CURRENT_VERSION> for SignatureKeyPair {}
 mod tests {
     use super::*;
     use tls_codec::{DeserializeBytes as TlsDeserializeBytesTrait, Serialize as TlsSerializeTrait};
+
+    #[test]
+    fn test_p521_sign_verify_roundtrip() {
+        let kp = SignatureKeyPair::new(SignatureScheme::ECDSA_SECP521R1_SHA512).unwrap();
+        let payload = b"AdytaPhone P-521 signature leg";
+        let signature = kp.sign(payload).unwrap();
+
+        let verifying_key = p521::ecdsa::VerifyingKey::from_encoded_point(
+            &p521::EncodedPoint::from_bytes(kp.public()).unwrap(),
+        )
+        .unwrap();
+        let signature = p521::ecdsa::Signature::from_der(&signature).unwrap();
+
+        use p521::ecdsa::signature::Verifier;
+        verifying_key.verify(payload, &signature).unwrap();
+    }
 
     #[test]
     fn test_serde_roundtrip() {
