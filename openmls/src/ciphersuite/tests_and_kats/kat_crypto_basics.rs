@@ -290,19 +290,7 @@ pub fn run_test_vector(
     }
 
     // sign with label
-    //
-    // NOTE: the `cipher_suite: 5` entry in `crypto-basics.json` carries a bad
-    // signature: it was generated with SHA-256 rather than the SHA-512 that
-    // RFC 9420 mandates for `ECDSA_SECP521R1_SHA512`. Verified independently
-    // with OpenSSL -- the vector's signature verifies over the correctly framed
-    // SignContent payload under SHA-256 and under no other hash, while the
-    // `cipher_suite: 2` entry verifies under its mandated SHA-256 using the same
-    // framing code. The vector's own key pair is self-consistent, so only the
-    // signature field is wrong. This was never caught upstream because OpenMLS
-    // skips 0x0005 as an unsupported ciphersuite. The rest of the 0x0005 vector
-    // (ref_hash, expand/derive, encrypt_with_label) is exercised normally.
-    // APHONE-1276.
-    if ciphersuite != Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521 {
+    {
         let private = hex_to_bytes(&test.sign_with_label.r#priv);
         let public = hex_to_bytes(&test.sign_with_label.r#pub);
         let label = test.sign_with_label.label;
