@@ -9,7 +9,7 @@ use ed25519_dalek::Signer;
 use hkdf::Hkdf;
 use hpke::Hpke;
 use hpke_rs_crypto::types as hpke_types;
-use hpke_rs_rust_crypto::HpkeRustCrypto;
+use hpke_rs_libcrux::HpkeLibcrux;
 #[cfg(feature = "targeted-messages-draft")]
 use openmls_traits::crypto::HpkeSealPskResolvedAadError;
 use openmls_traits::{
@@ -97,15 +97,13 @@ impl OpenMlsCrypto for RustCrypto {
         match ciphersuite {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
             | Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519
-            | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256 => Ok(()),
-            // NOTE: `MLS_256_DHKEMP521_AES256GCM_SHA512_P521` is intentionally NOT
-            // advertised here. `ECDSA_SECP521R1_SHA512` signing/verification is fully
-            // implemented below, but this ciphersuite's HPKE DH-KEM(P-521) has no
-            // implementation in the `hpke-rs-rust-crypto` backend we depend on (it only
-            // implements DhKem25519/P256/P384/K256 — verified by reading its source).
-            // `KeyPackage::builder().build()` would panic deriving `init_key` if this
-            // were advertised as supported. Tracked as a follow-up ticket before this
-            // ciphersuite can be used end-to-end.
+            | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256
+            // `MLS_256_DHKEMP521_AES256GCM_SHA512_P521` is usable end-to-end: HPKE
+            // DH-KEM(P-521) comes from `hpke-rs-libcrux`'s `rustcrypto-p-curves`
+            // feature, and `ECDSA_SECP521R1_SHA512` is implemented below. The
+            // `hpke-rs-rust-crypto` backend has no DhKemP521 arm, which is why this
+            // crate uses the libcrux provider instead. APHONE-1276.
+            | Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521 => Ok(()),
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             Ciphersuite::MLS_192_MLKEM1024_AES256GCM_SHA384_P384
             | Ciphersuite::MLS_128_MLKEM768X25519_AES256GCM_SHA384_Ed25519
@@ -125,7 +123,7 @@ impl OpenMlsCrypto for RustCrypto {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256,
-            // `MLS_256_DHKEMP521_AES256GCM_SHA512_P521` deliberately excluded, see `supports()`.
+            Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521,
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             Ciphersuite::MLS_192_MLKEM1024_AES256GCM_SHA384_P384,
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
@@ -713,8 +711,8 @@ impl OpenMlsCrypto for RustCrypto {
     }
 }
 
-fn hpke_from_config(config: HpkeConfig) -> Hpke<HpkeRustCrypto> {
-    Hpke::<HpkeRustCrypto>::new(
+fn hpke_from_config(config: HpkeConfig) -> Hpke<HpkeLibcrux> {
+    Hpke::<HpkeLibcrux>::new(
         hpke::Mode::Base,
         kem_mode(config.0),
         kdf_mode(config.1),
@@ -723,8 +721,8 @@ fn hpke_from_config(config: HpkeConfig) -> Hpke<HpkeRustCrypto> {
 }
 
 #[cfg(feature = "targeted-messages-draft")]
-fn hpke_psk_from_config(config: HpkeConfig) -> Hpke<HpkeRustCrypto> {
-    Hpke::<HpkeRustCrypto>::new(
+fn hpke_psk_from_config(config: HpkeConfig) -> Hpke<HpkeLibcrux> {
+    Hpke::<HpkeLibcrux>::new(
         hpke::Mode::Psk,
         kem_mode(config.0),
         kdf_mode(config.1),

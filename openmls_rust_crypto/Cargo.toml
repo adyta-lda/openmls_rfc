@@ -33,7 +33,7 @@ p521 = { version = "0.13" }
 hkdf = { version = "0.13" }
 rand_chacha = { version = "0.3" }
 hpke-rs-crypto = { version = "0.7" }
-hpke-rs-rust-crypto = { version = "0.7", features = ["experimental"] }
+hpke-rs-libcrux = { version = "0.7", features = ["rustcrypto-p-curves", "draft-connolly-cfrg-hpke-mlkem"] }
 tls_codec = { workspace = true }
 ml-dsa = "0.1.0"
 thiserror = { workspace = true }

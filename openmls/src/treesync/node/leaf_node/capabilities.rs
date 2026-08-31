@@ -409,6 +409,10 @@ pub(super) fn default_ciphersuites() -> Vec<Ciphersuite> {
         Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519,
         Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256,
         Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519,
+        // Kept in sync with `RustCrypto::supported_ciphersuites()`: a group may be
+        // created for any advertised ciphersuite, and a LeafNode whose capabilities
+        // omit it is rejected with `CiphersuiteNotInCapabilities`. APHONE-1276.
+        Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521,
         #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
         Ciphersuite::MLS_256_XWING_CHACHA20POLY1305_SHA256_Ed25519,
         #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
