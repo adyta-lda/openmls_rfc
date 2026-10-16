@@ -564,6 +564,11 @@ impl KeyPackage {
         // TODO: get rid of the unwrap, see https://github.com/openmls/openmls/issues/1663.
         self.payload.leaf_node.life_time().unwrap()
     }
+
+    /// Get the [`Signature`] of this KeyPackage.
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
 }
 
 /// Crate visible `KeyPackage` functions.

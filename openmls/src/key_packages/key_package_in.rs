@@ -245,6 +245,11 @@ impl KeyPackageIn {
             serialized_payload: None,
         }
     }
+
+    /// Get the [`Signature`] of this KeyPackage.
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
 }
 
 #[cfg(any(feature = "test-utils", test))]
