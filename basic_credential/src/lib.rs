@@ -96,6 +96,17 @@ impl Signer for SignatureKeyPair {
                 let signature: p384::ecdsa::Signature = k.sign(payload);
                 Ok(signature.to_der().to_bytes().into())
             }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let private = self
+                    .private
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| SignerError::SigningError)?;
+                let k = p521::ecdsa::SigningKey::from_bytes(private)
+                    .map_err(|_| SignerError::SigningError)?;
+                let signature: p521::ecdsa::Signature = k.sign(payload);
+                Ok(signature.to_der().to_bytes().into())
+            }
             SignatureScheme::ED25519 => {
                 let k = ed25519_dalek::SigningKey::try_from(self.private.as_slice())
                     .map_err(|_| SignerError::SigningError)?;
@@ -196,6 +207,11 @@ impl SignatureKeyPair {
             }
             SignatureScheme::ECDSA_SECP384R1_SHA384 => {
                 let k = p384::ecdsa::SigningKey::generate_from_rng(&mut UnwrapErr(SysRng));
+                let pk = k.verifying_key().to_sec1_point(false).as_bytes().into();
+                (k.to_bytes().as_slice().into(), pk)
+            }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = p521::ecdsa::SigningKey::generate_from_rng(&mut UnwrapErr(SysRng));
                 let pk = k.verifying_key().to_sec1_point(false).as_bytes().into();
                 (k.to_bytes().as_slice().into(), pk)
             }
@@ -372,6 +388,7 @@ mod tests {
         for (scheme, key_length) in [
             (SignatureScheme::ECDSA_SECP256R1_SHA256, 32),
             (SignatureScheme::ECDSA_SECP384R1_SHA384, 48),
+            (SignatureScheme::ECDSA_SECP521R1_SHA512, 66),
         ] {
             for private in [vec![1u8; key_length - 1], vec![1u8; key_length + 1]] {
                 let private_length = private.len();

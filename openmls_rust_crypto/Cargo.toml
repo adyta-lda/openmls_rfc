@@ -28,10 +28,13 @@ rand_core = { version = "0.10" }
 getrandom = { version = "0.4", features = ["sys_rng"] }
 p256 = { version = "0.14" }
 p384 = { version = "0.14" }
+p521 = { version = "0.14" }
 hkdf = { version = "0.13" }
 rand_chacha = { version = "0.10" }
 hpke-rs-crypto = { version = "0.8" }
-hpke-rs-rust-crypto = { version = "0.8" }
+# Fork of hpke-rs-rust-crypto 0.8.0 with DH KEM P-521 (branch p521_kem_v0.8),
+# needed for MLS_256_DHKEMP521_AES256GCM_SHA512_P521. Drop once upstream has it.
+hpke-rs-rust-crypto = { git = "https://github.com/adyta-lda/hpke-rs", rev = "b8204b2f9e38b22ec3a4ed3b4cd4cbb3de1de003" }
 tls_codec = { workspace = true }
 ml-dsa = { version = "0.1.0", optional = true }
 thiserror = { workspace = true }

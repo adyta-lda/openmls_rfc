@@ -19,6 +19,7 @@ serde = { workspace = true }
 ed25519-dalek = { version = "3.0", features = ["rand_core"] }
 p256 = { version = "0.14" }
 p384 = { version = "0.14" }
+p521 = { version = "0.14" }
 ml-dsa = { version = "0.1.0", optional = true }
 rand_core = { version = "0.10" }
 getrandom = { version = "0.4", features = ["sys_rng"] }

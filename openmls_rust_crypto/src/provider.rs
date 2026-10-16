@@ -93,7 +93,8 @@ impl OpenMlsCrypto for RustCrypto {
         match ciphersuite {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
             | Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519
-            | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256 => Ok(()),
+            | Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256
+            | Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521 => Ok(()),
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             Ciphersuite::MLS_192_MLKEM1024_AES256GCM_SHA384_P384
             | Ciphersuite::MLS_128_MLKEM768X25519_AES256GCM_SHA384_Ed25519
@@ -113,6 +114,7 @@ impl OpenMlsCrypto for RustCrypto {
             Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519,
             Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256,
+            Ciphersuite::MLS_256_DHKEMP521_AES256GCM_SHA512_P521,
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             Ciphersuite::MLS_192_MLKEM1024_AES256GCM_SHA384_P384,
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
@@ -311,6 +313,15 @@ impl OpenMlsCrypto for RustCrypto {
                 let pk = k.verifying_key().to_sec1_point(false).as_bytes().into();
                 Ok((k.to_bytes().as_slice().into(), pk))
             }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let mut rng = self
+                    .rng
+                    .write()
+                    .map_err(|_| CryptoError::InsufficientRandomness)?;
+                let k = p521::ecdsa::SigningKey::generate_from_rng(&mut *rng);
+                let pk = k.verifying_key().to_sec1_point(false).as_bytes().into();
+                Ok((k.to_bytes().as_slice().into(), pk))
+            }
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             SignatureScheme::MLDSA44 => {
                 use ml_dsa::{Generate, Keypair};
@@ -395,6 +406,16 @@ impl OpenMlsCrypto for RustCrypto {
                 )
                 .map_err(|_| CryptoError::InvalidSignature)
             }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let k = p521::ecdsa::VerifyingKey::from_sec1_bytes(pk)
+                    .map_err(|_| CryptoError::CryptoLibraryError)?;
+                k.verify(
+                    data,
+                    &p521::ecdsa::Signature::from_der(signature)
+                        .map_err(|_| CryptoError::InvalidSignature)?,
+                )
+                .map_err(|_| CryptoError::InvalidSignature)
+            }
             #[cfg(feature = "draft-ietf-mls-pq-ciphersuites")]
             SignatureScheme::MLDSA44 => {
                 use ml_dsa::Verifier;
@@ -459,6 +480,13 @@ impl OpenMlsCrypto for RustCrypto {
                 let k = p384::ecdsa::SigningKey::from_bytes(key)
                     .map_err(|_| CryptoError::CryptoLibraryError)?;
                 let signature: p384::ecdsa::Signature = k.sign(data);
+                Ok(signature.to_der().to_bytes().into())
+            }
+            SignatureScheme::ECDSA_SECP521R1_SHA512 => {
+                let key = key.try_into().map_err(|_| CryptoError::InvalidLength)?;
+                let k = p521::ecdsa::SigningKey::from_bytes(key)
+                    .map_err(|_| CryptoError::CryptoLibraryError)?;
+                let signature: p521::ecdsa::Signature = k.sign(data);
                 Ok(signature.to_der().to_bytes().into())
             }
             SignatureScheme::ED25519 => {
@@ -746,6 +774,7 @@ mod tests {
         for (scheme, key_length) in [
             (SignatureScheme::ECDSA_SECP256R1_SHA256, 32),
             (SignatureScheme::ECDSA_SECP384R1_SHA384, 48),
+            (SignatureScheme::ECDSA_SECP521R1_SHA512, 66),
         ] {
             for key in [vec![1u8; key_length - 1], vec![1u8; key_length + 1]] {
                 assert_eq!(
